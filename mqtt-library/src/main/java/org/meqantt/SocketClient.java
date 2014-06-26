@@ -20,89 +20,129 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Semaphore;
 
-import org.meqantt.message.ConnAckMessage;
-import org.meqantt.message.ConnectMessage;
-import org.meqantt.message.DisconnectMessage;
-import org.meqantt.message.Message;
-import org.meqantt.message.MessageInputStream;
-import org.meqantt.message.MessageOutputStream;
-import org.meqantt.message.PublishMessage;
-import org.meqantt.message.QoS;
-import org.meqantt.message.SubscribeMessage;
+import org.meqantt.message.*;
 
 
-public class SocketClient {
+public class SocketClient extends AbstractMqttClient {
 
 	private MessageInputStream in;
 	private Socket socket;
 	private MessageOutputStream out;
 	private MqttReader reader;
 	private Semaphore connectionAckLock;
-	private final String id;
 
 	public SocketClient(String id) {
 		this.id = id;
+        listeners.add(new SocketListener());
 	}
 
-	public void connect(String host, int port)
-			throws UnknownHostException, IOException, InterruptedException {
-		socket = new Socket(host, port);
-		InputStream is = socket.getInputStream();
-		in = new MessageInputStream(is);
-		OutputStream os = socket.getOutputStream();
-		out = new MessageOutputStream(os);
-		reader = new MqttReader();
-		reader.start();
-		ConnectMessage msg = new ConnectMessage(id, false, 60);
-		connectionAckLock = new Semaphore(0);
-		out.writeMessage(msg);
-		connectionAckLock.acquire();
+	public void connect(String host, int port) throws MqttException {
+        try {
+
+            handler = new DefaultMessageHandler();
+            handler.setListeners(listeners);
+
+            socket = new Socket(host, port);
+            InputStream is = socket.getInputStream();
+            in = new MessageInputStream(is);
+            OutputStream os = socket.getOutputStream();
+            out = new MessageOutputStream(os);
+            reader = new MqttReader();
+            reader.start();
+            ConnectMessage msg = new ConnectMessage(id, false, 60);
+            connectionAckLock = new Semaphore(0);
+            out.writeMessage(msg);
+            connectionAckLock.acquire();
+        } catch (InterruptedException e) {
+            throw new MqttException(e.getMessage(), e);
+        } catch (UnknownHostException e) {
+            throw new MqttException(e.getMessage(), e);
+        } catch (IOException e) {
+            throw new MqttException(e.getMessage(), e);
+        }
+    }
+
+    public void disconnect() throws MqttException {
+        try {
+            DisconnectMessage msg = new DisconnectMessage();
+            out.writeMessage(msg);
+            socket.close();
+        } catch (IOException e) {
+            throw new MqttException(e.getMessage(), e);
+        }
+    }
+
+	public void subscribe(String topic) throws MqttException {
+        try {
+            SubscribeMessage msg = new SubscribeMessage(topic, QoS.AT_MOST_ONCE);
+            out.writeMessage(msg);
+        } catch (IOException e) {
+            throw new MqttException(e.getMessage(), e);
+        }
 	}
 
-	public void publish(String topic, String message) throws IOException {
-		PublishMessage msg = new PublishMessage(topic, message);
-		out.writeMessage(msg);
-	}
+    public void unsubscribe(String topic) throws MqttException {
+        try {
+            UnsubscribeMessage msg = new UnsubscribeMessage(topic);
+            out.writeMessage(msg);
+        } catch (IOException e) {
+            throw new MqttException(e.getMessage(), e);
+        }
+    }
 
-	public void subscribe(String topic) throws IOException {
-		SubscribeMessage msg = new SubscribeMessage(topic, QoS.AT_MOST_ONCE);
-		out.writeMessage(msg);
-	}
+    public void publish(String topic, String message) throws MqttException {
+        try {
+            PublishMessage msg = new PublishMessage(topic, message);
+            out.writeMessage(msg);
+        } catch (IOException e) {
+            throw new MqttException(e.getMessage(), e);
+        }
+    }
 
-	public void disconnect() throws IOException {
-		DisconnectMessage msg = new DisconnectMessage();
-		out.writeMessage(msg);
-		socket.close();
-	}
+    public void ping() throws MqttException {
+        try {
+            PingReqMessage msg = new PingReqMessage();
+            out.writeMessage(msg);
+        } catch (IOException e) {
+            throw new MqttException(e.getMessage(), e);
+        }
+    }
 
-	private void handleMessage(Message msg) {
-		if (msg == null) {
-			return;
-		}
-		switch (msg.getType()) {
-		case CONNACK:
-			handleMessage((ConnAckMessage) msg);
-			break;
-		case PUBLISH:
-			handleMessage((PublishMessage) msg);
-			break;
-		default:
-			break;
-		}
-	}
+    public void addListener(MqttListener listener) {
+        listeners.add(listener);
+        if (handler != null) {
+            handler.addListener(listener);
+        }
+    }
 
-	private void handleMessage(ConnAckMessage msg) {
-		connectionAckLock.release();
-	}
+    public void setListeners(List<MqttListener> listeners) {
+        this.listeners = listeners;
+        if (handler != null) {
+            handler.setListeners(listeners);
+        }
+    }
 
-	private void handleMessage(PublishMessage msg) {
-		System.out.println("PUBLISH (" + msg.getTopic() + "): "
-				+ msg.getDataAsString());
-	}
+    private class SocketListener implements MqttListener {
 
-	private class MqttReader extends Thread {
+        public void connectAck(ConnAckMessage.ConnectionStatus status) {
+            connectionAckLock.release();
+        }
+
+        public void disconnected() {
+
+        }
+
+        public void publishArrived(String topic, byte[] data) {
+            System.out.println("PUBLISH (" + topic + "): "
+                    + new String(data));
+        }
+    }
+
+    private class MqttReader extends Thread {
 
 		@Override
 		public void run() {
@@ -110,7 +150,7 @@ public class SocketClient {
 			try {
 				while (true) {
 					msg = in.readMessage();
-					handleMessage(msg);
+                    handler.handleMessage(msg);
 				}
 			} catch (IOException e) {
 			}

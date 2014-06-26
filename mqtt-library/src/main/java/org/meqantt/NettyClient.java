@@ -16,6 +16,8 @@
 package org.meqantt;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 
 import org.jboss.netty.bootstrap.ClientBootstrap;
@@ -34,43 +36,33 @@ import org.meqantt.message.SubscribeMessage;
 import org.meqantt.message.UnsubscribeMessage;
 import org.meqantt.netty.MqttMessageDecoder;
 import org.meqantt.netty.MqttMessageEncoder;
-import org.meqantt.netty.MqttMessageHandler;
+import org.meqantt.netty.NettyMessageHandler;
 
 
-public class NettyClient {
+public class NettyClient extends AbstractMqttClient {
 
 	private Channel channel;
 	private ClientBootstrap bootstrap;
-	private final String id;
-	private MqttListener listener;
-	private MqttMessageHandler handler;
 
 	public NettyClient(String id) {
 		this.id = id;
 	}
-	
-	public void setListener(MqttListener listener) {
-		this.listener = listener;
-		if (handler != null) {
-			handler.setListener(listener);
-		}
-	}
 
-	/* (non-Javadoc)
-	 * @see com.albin.mqtt.MqttClient#connect(java.lang.String, int)
-	 */
-	public void connect(String host, int port) {
+    /* (non-Javadoc)
+         * @see com.albin.mqtt.MqttClient#connect(java.lang.String, int)
+         */
+	public void connect(String host, int port) throws MqttException {
 		bootstrap = new ClientBootstrap(new NioClientSocketChannelFactory(
 				Executors.newCachedThreadPool(),
 				Executors.newCachedThreadPool()));
 
-		handler = new MqttMessageHandler();
-		handler.setListener(listener);
+		handler = new NettyMessageHandler();
+		handler.setListeners(listeners);
 		bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
 
 			public ChannelPipeline getPipeline() throws Exception {
 				return Channels.pipeline(new MqttMessageEncoder(),
-						new MqttMessageDecoder(), handler);
+						new MqttMessageDecoder(), (NettyMessageHandler)handler);
 			}
 		});
 
@@ -94,7 +86,7 @@ public class NettyClient {
 	/* (non-Javadoc)
 	 * @see com.albin.mqtt.MqttClient#disconnect()
 	 */
-	public void disconnect() {
+	public void disconnect() throws MqttException {
 		channel.write(new DisconnectMessage()).awaitUninterruptibly();
 		channel.close().awaitUninterruptibly();
 		bootstrap.releaseExternalResources();
@@ -103,28 +95,28 @@ public class NettyClient {
 	/* (non-Javadoc)
 	 * @see com.albin.mqtt.MqttClient#subscribe(java.lang.String)
 	 */
-	public void subscribe(String topic) {
+	public void subscribe(String topic) throws MqttException {
 		channel.write(new SubscribeMessage(topic, QoS.AT_MOST_ONCE));
 	}
 
 	/* (non-Javadoc)
 	 * @see com.albin.mqtt.MqttClient#unsubscribe(java.lang.String)
 	 */
-	public void unsubscribe(String topic) {
+	public void unsubscribe(String topic) throws MqttException {
 		channel.write(new UnsubscribeMessage(topic));
 	}
 
 	/* (non-Javadoc)
 	 * @see com.albin.mqtt.MqttClient#publish(java.lang.String, java.lang.String)
 	 */
-	public void publish(String topic, String msg) {
+	public void publish(String topic, String msg) throws MqttException {
 		channel.write(new PublishMessage(topic, msg));
 	}
 
 	/* (non-Javadoc)
 	 * @see com.albin.mqtt.MqttClient#ping()
 	 */
-	public void ping() {
+	public void ping() throws MqttException {
 		channel.write(new PingReqMessage());
 	}
 

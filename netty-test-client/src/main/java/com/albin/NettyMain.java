@@ -19,8 +19,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
+import org.meqantt.MqttException;
 import org.meqantt.MqttListener;
 import org.meqantt.NettyClient;
+import org.meqantt.message.ConnAckMessage;
 import org.meqantt.util.FormatUtil;
 
 
@@ -32,7 +34,7 @@ public class NettyMain {
 	public static void main(String[] args) throws InterruptedException, IOException {
 		String id = args.length == 0 ? "Dummy_"+System.currentTimeMillis() : args[0];
 		client = new NettyClient(id);
-		client.setListener(new PrintingListener());
+		client.getListeners().add(new PrintingListener());
 		client.connect("localhost", 1883);
 		beInteractive();
 		client.disconnect();
@@ -57,20 +59,36 @@ public class NettyMain {
 	}
 
 	private static void unsubscribe(String topic) {
-		client.unsubscribe(topic);
-	}
+        try {
+            client.unsubscribe(topic);
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
 
 	private static void subscribe(String topic) {
-		client.subscribe(topic);
-	}
+        try {
+            client.subscribe(topic);
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
 
 	private static void publish(String msg) {
-		client.publish(topic, msg);
-	}
+        try {
+            client.publish(topic, msg);
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
 	
 	private static class PrintingListener implements MqttListener {
 
-		public void disconnected() {
+        public void connectAck(ConnAckMessage.ConnectionStatus status) {
+
+        }
+
+        public void disconnected() {
 			System.out.println("DISCONNECTED");
 		}
 

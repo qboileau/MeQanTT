@@ -21,14 +21,16 @@ import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelHandler;
 import org.meqantt.MqttListener;
-import org.meqantt.message.ConnAckMessage;
-import org.meqantt.message.Message;
-import org.meqantt.message.PublishMessage;
+import org.meqantt.MqttMessageHandler;
+import org.meqantt.message.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
-public class MqttMessageHandler extends SimpleChannelHandler {
-	
-	private MqttListener listener;
+public class NettyMessageHandler extends SimpleChannelHandler implements MqttMessageHandler {
+
+    private List<MqttListener> listeners = new ArrayList<MqttListener>();
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e)
@@ -41,9 +43,9 @@ public class MqttMessageHandler extends SimpleChannelHandler {
 	public void channelDisconnected(ChannelHandlerContext ctx,
 			ChannelStateEvent e) throws Exception {
 		super.channelDisconnected(ctx, e);
-		if (listener != null) {
-			listener.disconnected();
-		}
+        for (MqttListener listener : listeners) {
+            listener.disconnected();
+        }
 	}
 	
 	@Override
@@ -52,7 +54,7 @@ public class MqttMessageHandler extends SimpleChannelHandler {
 		handleMessage((Message) e.getMessage());
 	}
 	
-	private void handleMessage(Message msg) {
+	public void handleMessage(Message msg) {
 		if (msg == null) {
 			return;
 		}
@@ -69,18 +71,43 @@ public class MqttMessageHandler extends SimpleChannelHandler {
 	}
 
 	private void handleMessage(ConnAckMessage msg) {
-		// What to do here?
+        for (MqttListener listener : listeners) {
+            listener.connectAck(msg.getStatus());
+        }
 	}
 
 	private void handleMessage(PublishMessage msg) {
-		if (listener != null) {
-			listener.publishArrived(msg.getTopic(), msg.getData());
+        for (MqttListener listener : listeners) {
+            listener.publishArrived(msg.getTopic(), msg.getData());
 		}
 	}
 
-	public void setListener(MqttListener listener) {
-		this.listener = listener;
-	}
+    protected void handleMessage(PubRecMessage msg) {
+        //TODO
+    }
 
+    public void handleMessage(PubRelMessage msg) {
+        //TODO
+    }
+
+    public void handleMessage(SubAckMessage msg) {
+        //TODO
+    }
+
+    public void handleMessage(UnsubAckMessage msg) {
+        //TODO
+    }
+
+    public void handleMessage(PingRespMessage msg) {
+        //TODO
+    }
+
+    public void addListener(MqttListener listener) {
+        listeners.add(listener);
+    }
+
+	public void setListeners(List<MqttListener> listeners) {
+        this.listeners = listeners;
+	}
 
 }
