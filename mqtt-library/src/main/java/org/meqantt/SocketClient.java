@@ -34,13 +34,18 @@ public class SocketClient extends AbstractMqttClient {
 	private MessageOutputStream out;
 	private MqttReader reader;
 	private Semaphore connectionAckLock;
+    private boolean isConnected = false;
 
 	public SocketClient(String id) {
 		this.id = id;
         listeners.add(new SocketListener());
 	}
 
-	public void connect(String host, int port) throws MqttException {
+    public boolean isConnected() {
+        return isConnected;
+    }
+
+    public void connect(String host, int port) throws MqttException {
         try {
 
             handler = new DefaultMessageHandler();
@@ -71,6 +76,7 @@ public class SocketClient extends AbstractMqttClient {
             DisconnectMessage msg = new DisconnectMessage();
             out.writeMessage(msg);
             socket.close();
+            isConnected = false;
         } catch (IOException e) {
             throw new MqttException(e.getMessage(), e);
         }
@@ -130,6 +136,7 @@ public class SocketClient extends AbstractMqttClient {
 
         public void connectAck(ConnAckMessage.ConnectionStatus status) {
             connectionAckLock.release();
+            isConnected = true;
         }
 
         public void disconnected() {
@@ -142,6 +149,9 @@ public class SocketClient extends AbstractMqttClient {
         }
     }
 
+    /**
+     * Loop thread that handle incoming messages.
+     */
     private class MqttReader extends Thread {
 
 		@Override

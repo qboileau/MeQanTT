@@ -48,9 +48,13 @@ public class NettyClient extends AbstractMqttClient {
 		this.id = id;
 	}
 
+    public boolean isConnected() {
+        return (channel != null) && channel.isConnected();
+    }
+
     /* (non-Javadoc)
-         * @see com.albin.mqtt.MqttClient#connect(java.lang.String, int)
-         */
+             * @see com.albin.mqtt.MqttClient#connect(java.lang.String, int)
+             */
 	public void connect(String host, int port) throws MqttException {
 		bootstrap = new ClientBootstrap(new NioClientSocketChannelFactory(
 				Executors.newCachedThreadPool(),

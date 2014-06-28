@@ -24,6 +24,8 @@ public interface MqttClient {
 
     public String getId();
 
+    public boolean isConnected();
+
     public void connect(String host, int port) throws MqttException;
 
     public void disconnect() throws MqttException;
