@@ -18,9 +18,9 @@ package org.meqantt;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
@@ -28,6 +28,9 @@ import org.meqantt.message.*;
 
 
 public class SocketClient extends AbstractMqttClient {
+
+    private static final int DEFAULT_TIMEOUT = 30000;//30s
+    private static final int DEFAULT_KEEPALIVE = 60; //60s
 
 	private MessageInputStream in;
 	private Socket socket;
@@ -45,20 +48,41 @@ public class SocketClient extends AbstractMqttClient {
         return isConnected;
     }
 
+    /**
+     * Connect to a distant Mqtt server.
+     *
+     * @param host server address
+     * @param port server port
+     * @throws MqttException
+     */
     public void connect(String host, int port) throws MqttException {
+        connect(host, port, DEFAULT_TIMEOUT, DEFAULT_KEEPALIVE);
+    }
+
+    /**
+     * Connect to a distant Mqtt server.
+     *
+     * @param host server address
+     * @param port server port
+     * @param timeout in millisecond
+     * @param keepAlive keepAlive time in second
+     * @throws MqttException
+     */
+    public void connect(String host, int port, int timeout, int keepAlive) throws MqttException {
         try {
 
             handler = new DefaultMessageHandler();
             handler.setListeners(listeners);
 
-            socket = new Socket(host, port);
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(host, port) , timeout);
             InputStream is = socket.getInputStream();
             in = new MessageInputStream(is);
             OutputStream os = socket.getOutputStream();
             out = new MessageOutputStream(os);
             reader = new MqttReader();
             reader.start();
-            ConnectMessage msg = new ConnectMessage(id, false, 60);
+            ConnectMessage msg = new ConnectMessage(id, false, keepAlive);
             connectionAckLock = new Semaphore(0);
             out.writeMessage(msg);
             connectionAckLock.acquire();
@@ -76,9 +100,10 @@ public class SocketClient extends AbstractMqttClient {
             DisconnectMessage msg = new DisconnectMessage();
             out.writeMessage(msg);
             socket.close();
-            isConnected = false;
         } catch (IOException e) {
             throw new MqttException(e.getMessage(), e);
+        } finally {
+            isConnected = false;
         }
     }
 
